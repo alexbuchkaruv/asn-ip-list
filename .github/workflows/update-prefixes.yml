@@ -1,0 +1,57 @@
+name: Update IP Prefixes
+
+on:
+  schedule:
+    - cron: '0 2 * * *'   # Runs every day at 2:00 AM UTC
+  workflow_dispatch:        # Allows manual trigger too
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Resolve ASNs to prefixes
+        run: |
+          > prefixes.txt  # Clear the file first
+          while read asn; do
+            echo "# AS$asn" >> prefixes.txt
+            curl -s "https://api.bgpview.io/asn/$asn/prefixes" \
+              | jq -r '.data.ipv4_prefixes[].prefix' >> prefixes.txt
+            sleep 1  # Be polite to the API
+          done < asn-list.txt
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add prefixes.txt
+          git commit -m "Auto-update prefixes $(date +%Y-%m-%d)" || echo "No changes"
+          git push
+```
+
+---
+
+### How It All Works Together
+```
+asn-list.txt         GitHub Action runs daily        prefixes.txt
+[ 15169      ]  →→→  [ resolves via BGPView API ] →→→ [ 8.8.8.0/24  ]
+[ 13335      ]                                         [ 1.1.1.0/24  ]
+[ 8075       ]                                         [ 13.64.0.0/11]
+                                                            ↓
+                                                     FortiGate pulls
+                                                     raw GitHub URL
+```
+
+---
+
+### Steps to Set This Up
+
+1. **Create a new GitHub repo** (or use existing)
+2. **Add `asn-list.txt`** with your ASN numbers
+3. **Create the folder path** `.github/workflows/`
+4. **Add `update-prefixes.yml`** inside it
+5. **Run it manually first** → Go to *Actions* tab → click *"Run workflow"*
+6. **Point FortiGate** to:
+```
+   https://raw.githubusercontent.com/YOUR_USER/YOUR_REPO/main/prefixes.txt
