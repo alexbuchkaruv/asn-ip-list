@@ -5,17 +5,12 @@ on:
     - cron: '0 2 * * *'
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   update:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install jq
         run: sudo apt-get install -y jq
@@ -26,7 +21,8 @@ jobs:
           touch prefixes.txt
           while IFS= read -r asn; do
             echo "# AS${asn}" >> prefixes.txt
-            curl -s "https://api.bgpview.io/asn/${asn}/prefixes" | jq -r '.data.ipv4_prefixes[].prefix' >> prefixes.txt
+            curl -s "https://stat.ripe.net/data/announced-prefixes/data.json?resource=AS${asn}" \
+              | jq -r '.data.prefixes[].prefix' >> prefixes.txt
             sleep 2
           done < asn-list.txt
 
